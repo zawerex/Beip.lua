@@ -1,48 +1,220 @@
-local Library = loadstring(game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
-local SaveManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/SaveManager.luau"))()
-local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/InterfaceManager.luau"))()
+local success, Library = pcall(function()
+    return loadstring(game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
+end)
 
-local Window = Library:CreateWindow{
+if not success or not Library then
+    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Source.lua"))()
+end
+
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- Проверяем что библиотека загрузилась
+if not Library then
+    error("Failed to load Fluent Library")
+end
+
+local Window = Library:CreateWindow({
     Title = "Rivals X",
     SubTitle = "Cheat Menu",
     TabWidth = 160,
-    Size = UDim2.fromOffset(830, 525),
-    Resize = true,
-    MinSize = Vector2.new(470, 380),
-    Acrylic = true,
+    Size = UDim2.fromOffset(550, 400),
+    Acrylic = false, -- Отключаем прозрачность чтобы избежать ошибок
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.RightControl
-}
+})
 
-local Tabs = {
-    Legit = Window:CreateTab{
-        Title = "Legit",
-        Icon = "target"
-    },
-    Rage = Window:CreateTab{
-        Title = "Rage",
-        Icon = "flame"
-    },
-    Visuals = Window:CreateTab{
-        Title = "Visuals",
-        Icon = "eye"
-    },
-    Player = Window:CreateTab{
-        Title = "Player",
-        Icon = "user"
-    },
-    Exploits = Window:CreateTab{
-        Title = "Exploits",
-        Icon = "zap"
-    },
-    Settings = Window:CreateTab{
-        Title = "Settings",
-        Icon = "settings"
-    }
-}
+-- Убедимся что Window создан
+if not Window then
+    error("Failed to create window")
+end
 
-local Options = Library.Options
+-- Создаем табы с проверкой
+local Tabs = {}
 
+local tabNames = {"Legit", "Rage", "Visuals", "Player", "Exploits", "Settings"}
+for _, tabName in ipairs(tabNames) do
+    local success, tab = pcall(function()
+        return Window:CreateTab({
+            Title = tabName,
+            Icon = "settings" -- Простая иконка чтобы избежать ошибок
+        })
+    end)
+    
+    if success and tab then
+        Tabs[tabName] = tab
+    else
+        warn("Failed to create tab: " .. tabName)
+    end
+end
+
+-- Проверяем что есть хотя бы одна вкладка
+if not next(Tabs) then
+    error("No tabs were created successfully")
+end
+
+-- Создаем простые элементы для теста
+local function createSimpleToggle(tab, name, callback)
+    if not tab then return end
+    
+    local success, result = pcall(function()
+        return tab:CreateToggle(name, {
+            Title = name,
+            Default = false,
+            Callback = callback
+        })
+    end)
+    
+    if not success then
+        warn("Failed to create toggle: " .. name)
+    end
+end
+
+-- Создаем базовые тогглы для каждой вкладки
+if Tabs.Legit then
+    createSimpleToggle(Tabs.Legit, "Aimbot", function(value)
+        State.AimbotEnabled = value
+    end)
+    
+    createSimpleToggle(Tabs.Legit, "Triggerbot", function(value)
+        State.TriggerbotEnabled = value
+    end)
+end
+
+if Tabs.Rage then
+    createSimpleToggle(Tabs.Rage, "Silent Aim", function(value)
+        State.SilentAimEnabled = value
+    end)
+    
+    createSimpleToggle(Tabs.Rage, "Ragebot", function(value)
+        State.RagebotEnabled = value
+    end)
+end
+
+if Tabs.Visuals then
+    createSimpleToggle(Tabs.Visuals, "ESP", function(value)
+        State.ESPCustomEnabled = value
+    end)
+    
+    createSimpleToggle(Tabs.Visuals, "Chams", function(value)
+        State.ChamsEnabled = value
+    end)
+end
+
+if Tabs.Player then
+    createSimpleToggle(Tabs.Player, "Fly", function(value)
+        State.FlyEnabled = value
+        if value then
+            UpdateFly()
+        end
+    end)
+    
+    createSimpleToggle(Tabs.Player, "Noclip", function(value)
+        State.NoclipEnabled = value
+    end)
+end
+
+if Tabs.Exploits then
+    createSimpleToggle(Tabs.Exploits, "No Recoil", function(value)
+        State.NoRecoilEnabled = value
+    end)
+    
+    createSimpleToggle(Tabs.Exploits, "Rapid Fire", function(value)
+        State.RapidFireEnabled = value
+    end)
+end
+
+-- Простая кнопка выгрузки
+if Tabs.Settings then
+    local success, button = pcall(function()
+        return Tabs.Settings:CreateButton({
+            Title = "Unload Script",
+            Description = "Completely unload the cheat",
+            Callback = function()
+                Library:Unload()
+            end
+        })
+    end)
+    
+    if not success then
+        warn("Failed to create unload button")
+    end
+end
+
+-- Упрощенный основной цикл
+local function SafeExecute(func)
+    local success, err = pcall(func)
+    if not success then
+        warn("Error in SafeExecute: " .. tostring(err))
+    end
+end
+
+-- Запускаем обновления только если есть персонаж
+local updateConnections = {}
+
+local function startUpdates()
+    -- Останавливаем предыдущие соединения
+    for _, conn in ipairs(updateConnections) do
+        conn:Disconnect()
+    end
+    updateConnections = {}
+    
+    -- Запускаем основные обновления
+    table.insert(updateConnections, RunService.RenderStepped:Connect(function()
+        SafeExecute(UpdateNoclip)
+        SafeExecute(UpdateESP)
+        SafeExecute(UpdateMovement)
+        
+        if State.AimbotEnabled then
+            SafeExecute(UpdateAimbot)
+        end
+        if State.TriggerbotEnabled then
+            SafeExecute(UpdateTriggerbot)
+        end
+        if State.FlyEnabled then
+            SafeExecute(UpdateFly)
+        end
+    end))
+end
+
+-- Запускаем обновления когда появляется персонаж
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(1) -- Ждем пока персонаж полностью загрузится
+    startUpdates()
+end)
+
+if LocalPlayer.Character then
+    startUpdates()
+end
+
+-- Простое уведомление
+Library:Notify({
+    Title = "Rivals X",
+    Content = "Cheat loaded successfully!",
+    Duration = 5
+})
+
+-- Подключаем менеджеры с проверкой
+pcall(function()
+    SaveManager:SetLibrary(Library)
+    InterfaceManager:SetLibrary(Library)
+    SaveManager:IgnoreThemeSettings()
+    InterfaceManager:SetFolder("RivalsX")
+    SaveManager:SetFolder("RivalsX")
+    
+    if Tabs.Settings then
+        InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+        SaveManager:BuildConfigSection(Tabs.Settings)
+    end
+    
+    SaveManager:LoadAutoloadConfig()
+end)
+
+-- Выбираем первую вкладку если есть
+for _, tab in pairs(Tabs) do
+    Window:SelectTab(1)
+    break
+end
 -- Инициализация сервисов
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
